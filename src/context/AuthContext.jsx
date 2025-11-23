@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../supabaseClient';
 import { Leaf } from 'lucide-react';
+import { getUserProfile, createUserProfile } from '../services/profileService';
 
 const AuthContext = createContext();
 
@@ -10,6 +11,38 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Fungsi untuk load atau create profile
+  const loadUserProfile = async (userId) => {
+    setProfileLoading(true);
+    try {
+      let profile = await getUserProfile(userId);
+      
+      // Jika profil belum ada, buat profil baru
+      if (!profile) {
+        const defaultName = session?.user?.email?.split('@')[0] || 'User';
+        profile = await createUserProfile(userId, {
+          display_name: defaultName,
+        });
+      }
+      
+      setUserProfile(profile);
+    } catch (error) {
+      console.error("Error loading user profile:", error);
+      setUserProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  // Fungsi untuk refresh profile
+  const refreshUserProfile = async () => {
+    if (session?.user?.id) {
+      await loadUserProfile(session.user.id);
+    }
+  };
 
   // 1. Cek Session saat pertama kali mount
   useEffect(() => {
@@ -17,6 +50,11 @@ export const AuthProvider = ({ children }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
+        
+        // Load user profile jika ada session
+        if (session?.user?.id) {
+          await loadUserProfile(session.user.id);
+        }
       } catch (error) {
         console.error("Error fetching session:", error);
       } finally {
@@ -26,9 +64,16 @@ export const AuthProvider = ({ children }) => {
     checkSession();
 
     // 2. Listener perubahan otentikasi (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);
       setLoading(false);
+      
+      // Load user profile saat login
+      if (newSession?.user?.id) {
+        await loadUserProfile(newSession.user.id);
+      } else {
+        setUserProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -36,22 +81,26 @@ export const AuthProvider = ({ children }) => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setUserProfile(null);
   };
 
-  // User Data Visual Mocking
+  // User Data Visual - gabungkan dengan profile data
   const userVisual = session ? {
     id: session.user.id,
-    name: session.user.email.split('@')[0],
+    name: userProfile?.display_name || session.user.email.split('@')[0],
     email: session.user.email,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.id}`,
+    avatar: userProfile?.profile_photo_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.id}`,
+    bio: userProfile?.bio || '',
+    profile: userProfile,
   } : null;
 
   const value = {
     session,
     userVisual,
-    loading,
+    loading: loading || profileLoading,
     handleLogout,
     isAuthenticated: !!session,
+    refreshUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
