@@ -50,7 +50,7 @@ const AuthScreen = () => {
   };
   
   // Teks Dinamis
-  const title = isSignUp ? 'Buat Akun PlantPal' : 'PlantPal 🌱';
+  const title = isSignUp ? 'Buat Akun PlantPal' : 'PlantPal';
   const subtitle = isSignUp ? 'Daftar sekarang untuk memulai' : 'Masuk untuk merawat tanamanmu';
   const actionButtonText = isSignUp ? 'Daftar Sekarang' : 'Masuk Sekarang';
   const toggleText = isSignUp ? 'Sudah punya akun? Masuk di sini' : 'Belum punya akun? Daftar sekarang';
