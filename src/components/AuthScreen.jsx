@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Leaf, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient'; // <-- PERBAIKAN JALUR IMPORT
 
 const AuthScreen = () => {
@@ -63,8 +63,12 @@ const AuthScreen = () => {
     <div className="min-h-screen flex flex-col justify-center items-center bg-green-50 p-6">
       <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Leaf className="text-green-600" size={32} />
+          <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2">
+            <img 
+              src="/pwa-192x192.png" 
+              alt="PlantPal Icon" 
+              className="h-12 w-12 object-contain text-green-600" 
+            />
           </div>
           <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
           <p className="text-gray-500">{subtitle}</p>

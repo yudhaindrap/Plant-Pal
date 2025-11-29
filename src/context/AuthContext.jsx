@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../supabaseClient';
-import { Leaf, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 const AuthContext = createContext();
 
@@ -149,7 +149,11 @@ export const AuthProvider = ({ children }) => {
 // Loading Screen
 export const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 p-4 text-center">
-    <Leaf className="text-green-600 animate-pulse mb-4" size={48} />
+    <img 
+      src="/pwa-192x192.png" 
+      alt="PlantPal Loading Logo" 
+      className="h-12 w-12 object-contain animate-pulse mb-4" 
+    />
     <p className="text-gray-600 font-medium mb-6">Memuat PlantPal...</p>
 
     <button
