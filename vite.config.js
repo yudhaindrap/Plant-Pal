@@ -1,3 +1,5 @@
+// vite.config.js
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -15,6 +17,24 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 3000000, // Naikkan batas ukuran file cache (3MB)
         
         runtimeCaching: [
+          // 0. 🔥 BARU DITAMBAHKAN: Cache Permintaan API REST Supabase
+          {
+            // Pola URL API REST Supabase Anda
+            // Menggunakan Project URL yang Anda berikan: https://vflaxkuchicauwsmvynd.supabase.co
+            urlPattern: /^https:\/\/vflaxkuchicauwsmvynd\.supabase\.co\/rest\/v1\/.*/i,
+            handler: 'StaleWhileRevalidate', // Cepat tampilkan data cache, lalu update di background saat online
+            options: {
+              cacheName: 'supabase-api-data',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 // 1 Hari
+              },
+              // Pastikan hanya respons sukses (200) atau opaque (0) yang dicache
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            }
+          },
           // 1. Cache Gambar dari Placehold.co (Avatar default)
           {
             urlPattern: /^https:\/\/placehold\.co\/.*/i,
