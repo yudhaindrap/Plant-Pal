@@ -62,15 +62,15 @@ Mengelola seluruh koleksi tanaman:
 - CRUD optimistik → `addPlant`, `updatePlant`, `deletePlant`
 - Navigasi halaman detail tanaman
 - **Logika alarm penyiraman otomatis**
-  - Menggunakan `setInterval` untuk membaca `watering_schedule`
-  - Memicu **Notifikasi Browser**
-  - Memperbarui status `needsWater` secara otomatis
+- Menggunakan `setInterval` untuk membaca `watering_schedule`
+- Memicu **Notifikasi Browser**
+- Memperbarui status `needsWater` secara otomatis
 
 ---
 
 ## 🗄️ **Skema Database (Supabase)**
 
-Anda memerlukan 2 tabel utama:
+Anda memerlukan 3 tabel utama:
 
 ### **profiles**
 
@@ -96,6 +96,25 @@ Anda memerlukan 2 tabel utama:
 | `watering_schedule` | JSON/Array | List jam penyiraman    |
 
 ---
+
+### **Articles**
+
+| Kolom            | Tipe Data    | Keterangan                    |
+| ---------------- | ------------ | ----------------------------- |
+| `id`             | INT (PK, AI) | Primary key, auto increment   |
+| `title`          | VARCHAR(255) | Judul artikel                 |
+| `slug`           | VARCHAR(255) | URL-friendly slug (unique)    |
+| `summary`        | TEXT         | Ringkasan artikel             |
+| `content`        | LONGTEXT     | Konten lengkap artikel        |
+| `image_url`      | VARCHAR(255) | URL gambar artikel            |
+| `author`         | VARCHAR(100) | Penulis artikel               |
+| `tags`           | VARCHAR(255) | Tag artikel (dipisahkan koma) |
+| `published_at`   | DATETIME     | Tanggal publikasi             |
+| `created_at`     | TIMESTAMP    | Timestamp dibuat otomatis     |
+| `updated_at`     | TIMESTAMP    | Timestamp update otomatis     |
+
+---
+
 
 ## 🚀 **Persiapan & Instalasi (Getting Started)**
 

@@ -14,58 +14,67 @@ export const PlantDataProvider = ({ children }) => {
 
   // --- LOGIC ALARM GLOBAL DIMULAI DI SINI ---
   
-  // 1. Meminta Izin Notifikasi
+  // 1. Meminta Izin Notifikasi saat aplikasi pertama dimuat
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
     }
   }, []);
 
-  // 2. Interval Pengecekan Waktu (Berjalan setiap 10 detik saat app terbuka)
+  // 2. Interval Pengecekan Waktu (Berjalan setiap 10 detik)
   useEffect(() => {
-    // Note: Interval ini akan dibatasi atau dihentikan oleh browser jika tab tidak aktif/tertutup.
     if (!isAuthenticated || plants.length === 0) return;
 
     const checkSchedules = () => {
       const now = new Date();
+      // Format Jam: HH:MM
       const currentTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
+      // Format Tanggal Hari Ini: YYYY-MM-DD
       const todayDate = now.toISOString().split('T')[0];
 
       plants.forEach(plant => {
-        if (!plant.watering_schedule || plant.watering_schedule.length === 0 || plant.needsWater) return; // Skip if already needs water
+        if (!plant.watering_schedule || plant.watering_schedule.length === 0) return;
 
+        // Cek apakah Jam Sekarang ada di Jadwal
         if (plant.watering_schedule.includes(currentTime)) {
           
+          // KUNCI LOGIKA HARIAN:
+          // Kita buat Key unik kombinasi ID Tanaman + Jam + Tanggal Hari Ini
+          // Contoh Key: "notif-123-08:00-2023-11-28"
           const notifKey = `notif-${plant.id}-${currentTime}-${todayDate}`;
           const alreadyNotifiedToday = localStorage.getItem(notifKey);
 
+          // Jika BELUM ada catatan notifikasi hari ini untuk jam ini
           if (!alreadyNotifiedToday) {
             
             // 1. Trigger Notifikasi Browser
             if (Notification.permission === "granted") {
+              // Service Worker Registration check (opsional untuk PWA, fallback ke new Notification)
               if (navigator.serviceWorker && navigator.serviceWorker.ready) {
                  navigator.serviceWorker.ready.then(registration => {
                     registration.showNotification(`Waktunya menyiram ${plant.name}!`, {
-                      body: `Sekarang jam ${currentTime}, ayo cek tanamanmu! 🌱`,
+                      body: `Sekarang jam ${currentTime}, ayo cek tanamanmu!`,
                       icon: plant.image_url || '/pwa-512x512.png',
                       vibrate: [200, 100, 200]
                     });
                  });
               } else {
                  new Notification(`Waktunya menyiram ${plant.name}!`, {
-                   body: `Sekarang jam ${currentTime}, ayo cek tanamanmu! 🌱`,
+                   body: `Sekarang jam ${currentTime}, ayo cek tanamanmu!`,
                    icon: '/pwa-512x512.png'
                  });
               }
             }
 
             // 2. Update Status Tanaman jadi "Butuh Air" (Kuning)
+            // Kita paksa update walaupun statusnya masih 'false', agar user sadar
             updatePlant(plant.id, { needsWater: true });
 
-            // 3. Simpan key ke LocalStorage
+            // 3. Simpan key ke LocalStorage agar tidak spamming di menit yang sama
             localStorage.setItem(notifKey, 'true');
             
-            // 4. Bersihkan localStorage lama
+            // Bersihkan localStorage lama (opsional, untuk hemat memori)
+            // Hapus key kemarin
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayDate = yesterday.toISOString().split('T')[0];
@@ -75,183 +84,74 @@ export const PlantDataProvider = ({ children }) => {
       });
     };
 
+    // Jalankan interval setiap 10 detik agar lebih presisi menangkap menit
     const intervalId = setInterval(checkSchedules, 10000);
 
     return () => clearInterval(intervalId);
   }, [plants, isAuthenticated]); 
+  // Dependency 'plants' penting agar data jadwal selalu update
 
   // --- LOGIC ALARM SELESAI ---
+
+  // ... (Sisa kode fetchAllPlants, addPlant, deletePlant, updatePlant sama seperti sebelumnya) ...
   
-  // ----------------------------------------------------
-  // PERUBAHAN UTAMA: Real-time Subscription dan Catch-Up Logic
-  // ----------------------------------------------------
-  useEffect(() => {
-    if (!isAuthenticated || !session?.user?.id) {
-        setPlants([]); 
-        return;
-    }
+  const fetchAllPlants = async () => {
+    if (!isAuthenticated) { setPlants([]); return; }
+    const { data, error } = await supabase.from('plants').select('*').order('created_at', { ascending: false });
+    if (error) console.error(error); else setPlants(data || []);
+  };
 
-    const checkMissedSchedulesAndFetch = async () => {
-        // 1. Fetch data awal dari database
-        const { data, error } = await supabase.from('plants').select('*').order('created_at', { ascending: false });
-        if (error) {
-            console.error(error);
-            setPlants([]);
-            return;
-        }
-        
-        const now = new Date();
-        // Total menit hari ini (misal 09:30 = 9*60 + 30 = 570)
-        const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
-        const todayDate = now.toISOString().split('T')[0];
-        
-        let updatesNeeded = [];
-        
-        // CATCH-UP LOGIC: Cek setiap tanaman untuk jadwal yang terlewat
-        const updatedPlants = (data || []).map(plant => {
-            // Jika sudah needsWater, atau tidak ada jadwal, lewati
-            if (!plant.watering_schedule || plant.watering_schedule.length === 0 || plant.needsWater) {
-                return plant;
-            }
+  useEffect(() => { fetchAllPlants(); }, [isAuthenticated]);
 
-            let needsWaterCheck = false;
-            
-            // Cek setiap jadwal hari ini
-            plant.watering_schedule.forEach(schedTime => {
-                const [hour, minute] = schedTime.split(':').map(Number);
-                const schedTimeMinutes = hour * 60 + minute;
-                
-                // Jika jadwal sudah lewat hari ini (waktu saat ini > jadwal)
-                if (schedTimeMinutes <= currentTimeMinutes) {
-                    // Cek LocalStorage key yang sama dengan yang digunakan di setInterval
-                    const notifKey = `notif-${plant.id}-${schedTime}-${todayDate}`;
-                    const alreadyNotifiedToday = localStorage.getItem(notifKey);
-                    
-                    // Jika jadwal terlewat DAN belum ada notifikasi hari ini (berarti missed)
-                    if (!alreadyNotifiedToday) {
-                        needsWaterCheck = true;
-                        updatesNeeded.push({ id: plant.id, needsWater: true });
-                        // Set LocalStorage key untuk mencegah re-trigger pada interval
-                        localStorage.setItem(notifKey, 'true');
-                        // Tidak perlu notifikasi browser saat catch-up load
-                    }
-                }
-            });
+  const refreshData = () => { fetchAllPlants(); };
 
-            if (needsWaterCheck) {
-                // Update needsWater: true di state lokal segera
-                return { ...plant, needsWater: true }; 
-            }
-            return plant;
-        });
-        
-        // Terapkan state lokal yang sudah diperbarui dengan data catch-up
-        setPlants(updatedPlants);
-
-        // 2. Terapkan update ke database untuk status needsWater yang terlewat
-        for (const update of updatesNeeded) {
-             const { error: updateError } = await supabase.from('plants').update({ needsWater: true }).eq('id', update.id);
-             if (updateError) console.error("Failed to update needsWater status on load:", updateError);
-        }
-
-    };
-    
-    // Panggil fungsi catch-up saat login/mount
-    checkMissedSchedulesAndFetch();
-
-    // 3. Setup channel Real-time (Untuk sinkronisasi instan setelah Catch-Up)
-    const channel = supabase
-      .channel('plants_realtime_channel')
-      .on('postgres_changes', 
-          { 
-              event: '*', 
-              schema: 'public', 
-              table: 'plants',
-          }, 
-          (payload) => {
-            const plant = payload.new || payload.old;
-            
-            if (plant && plant.user_id === session.user.id) {
-
-              setPlants(prevPlants => {
-                switch (payload.eventType) {
-                  case 'INSERT':
-                    if (!prevPlants.some(p => p.id === plant.id)) {
-                      return [plant, ...prevPlants];
-                    }
-                    return prevPlants;
-
-                  case 'UPDATE':
-                    return prevPlants.map(p => 
-                      p.id === plant.id ? { ...p, ...payload.new } : p
-                    );
-
-                  case 'DELETE':
-                    if (selectedPlant && payload.old.id === selectedPlant.id) {
-                        setSelectedPlant(null);
-                    }
-                    return prevPlants.filter(p => p.id !== payload.old.id);
-                  
-                  default:
-                    return prevPlants;
-                }
-              });
-            }
-          }
-      )
-      .subscribe();
-
-    // 4. Cleanup
-    return () => {
-      supabase.removeChannel(channel);
-    };
-
-  }, [isAuthenticated, session?.user?.id, selectedPlant]); 
-  
-  // refreshData sekarang hanya akan memanggil fetch, sebagai fallback
-  const refreshData = () => { /* Now handled by checkMissedSchedulesAndFetch */ };
-
-  // Sederhanakan addPlant, deletePlant, dan updatePlant untuk mengandalkan Real-time Listener
   const addPlant = async (newPlantData) => {
     if (!isAuthenticated) return false;
     try {
       const plantWithUserId = { ...newPlantData, user_id: session.user.id };
-      const { error } = await supabase.from('plants').insert(plantWithUserId);
+      const { data, error } = await supabase.from('plants').insert(plantWithUserId).select().single();
       if (error) throw error;
-      
-      refreshTotalPlantsCount();
+      if (data) {
+        setPlants(prev => [data, ...prev]);
+        refreshTotalPlantsCount();
+      }
       return true;
     } catch (error) {
-      console.error(error); 
-      return false;
+      console.error(error); return false;
     }
   };
 
   const deletePlant = async (plantId) => {
     if (!isAuthenticated) return false;
-    
+    const previousPlants = [...plants];
+    setPlants((prev) => prev.filter((p) => p.id !== plantId));
+    setSelectedPlant(null);
     try {
       const { error } = await supabase.from('plants').delete().eq('id', plantId);
       if (error) throw error;
       refreshTotalPlantsCount();
       return true;
     } catch (error) {
-      // Jika gagal, panggil ulang fetch untuk sinkronisasi paksa (fallback)
-      // checkMissedSchedulesAndFetch tidak perlu dipanggil di sini karena listener sudah berjalan.
-      console.error(error); 
+      setPlants(previousPlants);
       return false;
     }
   };
 
   const updatePlant = async (plantId, updates) => {
     if (!isAuthenticated || !plantId) return false;
-    
+    const previousPlants = [...plants];
+    const previousSelected = selectedPlant;
+
+    setPlants((prev) => prev.map((p) => (p.id === plantId ? { ...p, ...updates } : p)));
+    setSelectedPlant((prev) => (prev && prev.id === plantId ? { ...prev, ...updates } : prev));
+
     try {
       const { error } = await supabase.from('plants').update(updates).eq('id', plantId);
       if (error) throw error;
       return true;
     } catch (error) {
-      console.error(error);
+      setPlants(previousPlants);
+      setSelectedPlant(previousSelected);
       return false;
     }
   };
